@@ -83,3 +83,17 @@ tests feature labels on those seeds without FluidUse's heuristic shortlist.
 
 The runner covers single-player games and does not calculate confidence
 intervals or publish a model leaderboard.
+
+To measure how far each prompt gets in the full 2048 game, use `2048-v0` and
+`--max-decisions 0` to continue until the game reaches 2048 or ends in a loss.
+The paired, concurrent runner checkpoints every completed episode so an
+interrupted batch can resume from the same output directory:
+
+```sh
+python scripts/run_full2048.py --seed 100 --episodes 20 --workers 4 \
+  --output-dir full2048-results
+```
+
+This runner evaluates v1–v4 and random on the same seeds. Jev runs require
+`TYPESAFE_API_KEY` in the process environment. The JSONL checkpoint records
+individual episodes; each prompt version also gets a sorted JSON result file.

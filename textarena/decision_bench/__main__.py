@@ -14,7 +14,7 @@ from .systemone import SystemOnePolicy
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--games", default=",".join(GAME_ACTIONS))
+    parser.add_argument("--games", default="2048-v0-super-easy,Sokoban-v0,Blackjack-v0")
     parser.add_argument("--policy", choices=("random", "systemone"), default="random")
     parser.add_argument("--name", default="decision-model")
     parser.add_argument("--endpoint")
@@ -22,7 +22,9 @@ def main() -> None:
     parser.add_argument("--api-key-env")
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--seed", type=int, default=100)
-    parser.add_argument("--max-decisions", type=int, default=500)
+    parser.add_argument(
+        "--max-decisions", type=int, default=500, help="0 runs until game over"
+    )
     parser.add_argument("--prompt-version", choices=PROMPT_VERSIONS, default="v1")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -31,10 +33,12 @@ def main() -> None:
     unknown = set(games) - GAME_ACTIONS.keys()
     if unknown:
         parser.error(f"unsupported games: {', '.join(sorted(unknown))}")
+    if args.max_decisions < 0:
+        parser.error("--max-decisions must be zero or positive")
     if args.prompt_version == "v4" and any(
         not game.startswith("2048-") for game in games
     ):
-        parser.error("v4 is available only for 2048; pass --games 2048-v0-super-easy")
+        parser.error("v4 is available only for 2048")
     if args.policy == "systemone":
         if not all((args.endpoint, args.model, args.api_key_env)):
             parser.error("systemone requires --endpoint, --model, and --api-key-env")
@@ -54,7 +58,7 @@ def main() -> None:
         policy_factory,
         first_seed=args.seed,
         episodes=args.episodes,
-        max_decisions=args.max_decisions,
+        max_decisions=args.max_decisions or None,
         prompt_version=args.prompt_version,
     )
     with args.output.open("x") as output:

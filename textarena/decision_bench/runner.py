@@ -21,9 +21,10 @@ from .prompts import (
     v4_observation,
 )
 
-PROTOCOL_VERSION = "0.5.0"
+PROTOCOL_VERSION = "0.6.0"
 GAME_ACTIONS = {
     "2048-v0-super-easy": ("UP", "DOWN", "LEFT", "RIGHT"),
+    "2048-v0": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Sokoban-v0": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Blackjack-v0": ("HIT", "STAND"),
 }
@@ -94,13 +95,13 @@ def run_episode(
     policy: Policy,
     *,
     seed: int,
-    max_decisions: int = 500,
+    max_decisions: int | None = 500,
     prompt_version: str = "v1",
 ) -> dict:
     """Use only the observation returned to the current player by TextArena."""
     if game_id not in GAME_ACTIONS:
         raise ValueError(f"unsupported decision-bench game: {game_id}")
-    if max_decisions < 1:
+    if max_decisions is not None and max_decisions < 1:
         raise ValueError("max_decisions must be positive")
     if prompt_version not in PROMPT_VERSIONS:
         raise ValueError(f"unsupported prompt version: {prompt_version}")
@@ -116,7 +117,7 @@ def run_episode(
     done = False
     closed = False
     try:
-        while not done and len(latencies) < max_decisions:
+        while not done and (max_decisions is None or len(latencies) < max_decisions):
             player_id, observation = env.get_observation()
             if player_id != 0 or not isinstance(observation, str):
                 raise RuntimeError("expected a single-player text observation")
@@ -208,7 +209,7 @@ def run_benchmark(
     *,
     first_seed: int,
     episodes: int,
-    max_decisions: int = 500,
+    max_decisions: int | None = 500,
     prompt_version: str = "v1",
 ) -> dict:
     if episodes < 1:

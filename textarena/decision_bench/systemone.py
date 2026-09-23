@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 
@@ -70,8 +72,17 @@ class SystemOnePolicy:
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            body = json.load(response)
+        for attempt in range(6):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    body = json.load(response)
+                break
+            except urllib.error.HTTPError as error:
+                if error.code not in (429, 502, 503, 504) or attempt == 5:
+                    raise
+                retry_after = error.headers.get("Retry-After", "")
+                delay = float(retry_after) if retry_after.isdigit() else 2**attempt
+                time.sleep(min(delay, 30))
         answer = body["answers"]["action"]["choice"]
         usage = body.get("usage") or {}
         return Decision(

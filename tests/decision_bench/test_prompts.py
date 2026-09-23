@@ -3,6 +3,7 @@ import json
 import os
 import random
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 import textarena as ta
@@ -137,6 +138,33 @@ class PromptVersionTests(unittest.TestCase):
             {"LEFT": "merge", "RIGHT": "slide"},
         )
 
+    def test_systemone_retries_rate_limit_for_parallel_runs(self):
+        answer = io.BytesIO(
+            json.dumps({"answers": {"action": {"choice": "LEFT"}}}).encode()
+        )
+        limited = urllib.error.HTTPError(
+            "https://example.test/v1/systemone",
+            429,
+            "rate limit",
+            {"Retry-After": "0"},
+            None,
+        )
+        policy = SystemOnePolicy(
+            name="test",
+            endpoint="https://example.test/v1/systemone",
+            model="model-x",
+            api_key_env="TEST_DECISION_KEY",
+        )
+        with (
+            patch.dict(os.environ, {"TEST_DECISION_KEY": "secret"}),
+            patch("urllib.request.urlopen", side_effect=[limited, answer]) as urlopen,
+            patch("time.sleep") as sleep,
+        ):
+            decision = policy.decide("board", ("LEFT", "RIGHT"))
+        self.assertEqual(decision.action, "LEFT")
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once_with(0.0)
+
     def test_v3_2048_excludes_current_and_future_board_renderings(self):
         env = environment("2048-v0-super-easy")
         try:
@@ -216,6 +244,21 @@ class PromptVersionTests(unittest.TestCase):
             run_episode(
                 "Sokoban-v0", policy, seed=100, max_decisions=1, prompt_version="v4"
             )
+
+    def test_full_2048_can_run_without_a_decision_cap(self):
+        result = run_episode(
+            "2048-v0",
+            RandomPolicy(100),
+            seed=100,
+            max_decisions=None,
+            prompt_version="v4",
+        )
+        self.assertTrue(result["completed"])
+        self.assertNotEqual(result["terminal_reason"], "decision_limit")
+        self.assertLess(result["max_tile"], 2048)
+        policy = CapturePolicy()
+        run_episode("2048-v0", policy, seed=100, max_decisions=1, prompt_version="v4")
+        self.assertIn("Reach a tile worth 2048", policy.observation)
 
     def test_prompt_versions_do_not_change_random_gameplay(self):
         arguments = {"first_seed": 100, "episodes": 3, "max_decisions": 20}
