@@ -54,5 +54,9 @@ an incomplete episode, not a loss or a win. The JSON records the policy's model
 identifier and each episode's native reward, success, invalid-move flag,
 decisions, latency, and raw metric. Policy failures are saved and return a nonzero
 exit status.
-This pilot does not yet include multiplayer games, confidence intervals, or a
-published model leaderboard.
+
+The [2048 v1/v2 prompt comparison](../benchmarks/2048-v1-v2-seed100-20/README.md)
+includes its run settings, aggregate results, and raw per-episode JSON.
+
+The runner covers single-player games and does not calculate confidence
+intervals or publish a model leaderboard.
