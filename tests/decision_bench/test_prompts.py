@@ -6,12 +6,20 @@ import unittest
 from unittest.mock import patch
 
 import textarena as ta
-from textarena.decision_bench.prompts import _slide_board, v2_criteria, v2_observation
+from textarena.decision_bench.prompts import (
+    _slide_board,
+    v2_criteria,
+    v2_observation,
+    v3_criteria,
+    v3_observation,
+)
 from textarena.decision_bench.runner import (
     GAME_ACTIONS,
     CurrentBoardObservationWrapper,
+    Decision,
     RandomPolicy,
     run_benchmark,
+    run_episode,
 )
 from textarena.decision_bench.systemone import SystemOnePolicy
 
@@ -20,6 +28,15 @@ def environment(game):
     env = CurrentBoardObservationWrapper(ta.make(f"{game}-raw"))
     env.reset(num_players=1, seed=100)
     return env
+
+
+class CapturePolicy:
+    name = "capture"
+
+    def decide(self, observation, actions, criteria=None):
+        self.observation = observation
+        self.criteria = criteria
+        return Decision(actions[0])
 
 
 class PromptVersionTests(unittest.TestCase):
@@ -118,7 +135,50 @@ class PromptVersionTests(unittest.TestCase):
             {"LEFT": "merge", "RIGHT": "slide"},
         )
 
-    def test_v1_is_default_and_v2_does_not_change_random_gameplay(self):
+    def test_v3_2048_excludes_current_and_future_board_renderings(self):
+        env = environment("2048-v0-super-easy")
+        try:
+            env.state.game_state["board"] = [[2, 2, 0, 0]] + [[0] * 4 for _ in range(3)]
+            observation = v3_observation(env, "2048-v0-super-easy")
+            criteria = v3_criteria(env, "2048-v0-super-easy", ("LEFT", "UP"))
+            self.assertIn("2 tiles worth 2", observation)
+            self.assertIn(
+                "1 pair of tiles worth 2 merges into 1 tile worth 4", criteria["LEFT"]
+            )
+            self.assertNotIn("|", observation)
+            self.assertNotIn("Board before spawn", str(criteria))
+            self.assertNotIn(" / ", str(criteria))
+            self.assertNotIn("row", observation + str(criteria))
+        finally:
+            env.close()
+
+    def test_v3_runner_never_sends_a_grid_for_board_games(self):
+        for game in ("2048-v0-super-easy", "Sokoban-v0"):
+            with self.subTest(game=game):
+                policy = CapturePolicy()
+                run_episode(
+                    game, policy, seed=100, max_decisions=1, prompt_version="v3"
+                )
+                request_text = policy.observation + str(policy.criteria)
+                self.assertNotIn("Board before spawn", request_text)
+                self.assertNotIn("Current Board:", request_text)
+                self.assertNotIn("|", request_text)
+                self.assertNotIn("# # #", request_text)
+                self.assertEqual(set(policy.criteria), set(GAME_ACTIONS[game]))
+
+    def test_v3_blackjack_spells_visible_cards_without_hidden_card(self):
+        env = environment("Blackjack-v0")
+        try:
+            first = v3_observation(env, "Blackjack-v0")
+            self.assertIn("four of clubs, nine of hearts", first)
+            self.assertIn("King of clubs", first)
+            self.assertNotIn("K♦", first)
+            env.state.game_state["dealer_hand"][1] = "A♠"
+            self.assertEqual(first, v3_observation(env, "Blackjack-v0"))
+        finally:
+            env.close()
+
+    def test_prompt_versions_do_not_change_random_gameplay(self):
         arguments = {"first_seed": 100, "episodes": 3, "max_decisions": 20}
         old = run_benchmark(
             ("2048-v0-super-easy", "Sokoban-v0", "Blackjack-v0"),
@@ -131,12 +191,20 @@ class PromptVersionTests(unittest.TestCase):
             prompt_version="v2",
             **arguments,
         )
+        verbal = run_benchmark(
+            ("2048-v0-super-easy", "Sokoban-v0", "Blackjack-v0"),
+            RandomPolicy,
+            prompt_version="v3",
+            **arguments,
+        )
         self.assertEqual(old["prompt_version"], "v1")
         self.assertEqual(new["prompt_version"], "v2")
-        for first, second in zip(old["results"], new["results"]):
-            first.pop("mean_latency_ms")
-            second.pop("mean_latency_ms")
-            self.assertEqual(first, second)
+        self.assertEqual(verbal["prompt_version"], "v3")
+        for rows in (old["results"], new["results"], verbal["results"]):
+            for row in rows:
+                row.pop("mean_latency_ms")
+        self.assertEqual(old["results"], new["results"])
+        self.assertEqual(old["results"], verbal["results"])
 
 
 if __name__ == "__main__":

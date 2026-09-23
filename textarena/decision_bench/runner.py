@@ -11,9 +11,15 @@ from typing import Protocol
 
 import textarena as ta
 
-from .prompts import PROMPT_VERSIONS, v2_criteria, v2_observation
+from .prompts import (
+    PROMPT_VERSIONS,
+    v2_criteria,
+    v2_observation,
+    v3_criteria,
+    v3_observation,
+)
 
-PROTOCOL_VERSION = "0.3.0"
+PROTOCOL_VERSION = "0.4.0"
 GAME_ACTIONS = {
     "2048-v0-super-easy": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Sokoban-v0": ("UP", "DOWN", "LEFT", "RIGHT"),
@@ -114,9 +120,12 @@ def run_episode(
             if prompt_version == "v2":
                 observation = v2_observation(env, game_id, observation)
                 criteria = v2_criteria(env, game_id, presented_actions)
+            elif prompt_version == "v3":
+                observation = v3_observation(env, game_id)
+                criteria = v3_criteria(env, game_id, presented_actions)
             started = time.perf_counter()
             try:
-                if prompt_version == "v2":
+                if prompt_version != "v1":
                     decision = policy.decide(observation, presented_actions, criteria)
                 else:
                     decision = policy.decide(observation, presented_actions)

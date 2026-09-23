@@ -4,8 +4,24 @@ from __future__ import annotations
 
 from collections import Counter
 
-PROMPT_VERSIONS = ("v1", "v2")
+PROMPT_VERSIONS = ("v1", "v2", "v3")
 _DIRECTIONS = {"UP": (-1, 0), "DOWN": (1, 0), "LEFT": (0, -1), "RIGHT": (0, 1)}
+_RANK_NAMES = {
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+    "10": "ten",
+    "J": "Jack",
+    "Q": "Queen",
+    "K": "King",
+    "A": "Ace",
+}
+_SUIT_NAMES = {"♠": "spades", "♥": "hearts", "♦": "diamonds", "♣": "clubs"}
 
 
 def v2_observation(env, game_id: str, observation: str) -> str:
@@ -26,6 +42,69 @@ def v2_criteria(env, game_id: str, actions: tuple[str, ...]) -> dict[str, str]:
     if game_id == "Sokoban-v0":
         return {action: _preview_sokoban(env, action) for action in actions}
     return {action: _preview_blackjack(env, action) for action in actions}
+
+
+def v3_observation(env, game_id: str) -> str:
+    """Describe visible game information without including a board rendering."""
+    if game_id.startswith("2048-"):
+        board = env.state.game_state["board"]
+        tiles = Counter(value for row in board for value in row if value)
+        tile_text = ", ".join(
+            f"{count} tile{'s' if count != 1 else ''} worth {value}"
+            for value, count in sorted(tiles.items())
+        )
+        empty = sum(value == 0 for row in board for value in row)
+        return (
+            f"You are playing 2048 on a {env.board_size} by {env.board_size} grid. "
+            f"Reach a tile worth {env.target_tile} by sliding up, down, left, or right. "
+            "Equal tiles merge. A successful slide then spawns one random tile. "
+            "The third consecutive invalid or no-effect move ends the game. "
+            f"Current score: {env.state.game_state['score']}. Largest tile: {max(tiles)}. "
+            f"Empty spaces: {empty}. Tiles: {tile_text}. "
+            f"Consecutive invalid or no-effect moves: {env.state.error_count}/3."
+        )
+    if game_id == "Sokoban-v0":
+        row, col = map(int, env.player_position)
+        goals = int((env.room_state == 3).sum())
+        return (
+            "You are solving Sokoban. Push all boxes onto goals by moving up, "
+            "down, left, or right. Walls and other boxes block pushes; boxes "
+            "cannot be pulled. "
+            f"Player position: row {row + 1}, column {col + 1}. "
+            f"Boxes on goals: {goals}/{env.num_boxes}. "
+            f"Moves used: {env.state.turn}/{env.max_turns}."
+        )
+    state = env.state.game_state
+    results = state["results_summary"]
+    hand = ", ".join(_card_name(card) for card in state["player_hand"])
+    dealer_upcard = _card_name(state["dealer_hand"][0])
+    return (
+        "You are playing Blackjack against the dealer. Get as close to 21 as "
+        "possible without going over. Hit draws a card; stand keeps your total. "
+        "The dealer draws until reaching at least 17. "
+        f"Hand {state['hand_number']} of {state['num_hands']}. "
+        f"Your cards: {hand}. Your total: {env._hand_score(state['player_hand'])}. "
+        f"Dealer's visible card: {dealer_upcard}. The other card is hidden. "
+        f"Previous hands: {results['win']} wins, {results['lose']} losses, "
+        f"{results['draw']} draws."
+    )
+
+
+def v3_criteria(env, game_id: str, actions: tuple[str, ...]) -> dict[str, str]:
+    if game_id.startswith("2048-"):
+        return {
+            action: _preview_2048(env, action, include_board=False)
+            for action in actions
+        }
+    if game_id == "Sokoban-v0":
+        return {action: _preview_sokoban(env, action) for action in actions}
+    return {
+        action: _preview_blackjack(env, action, verbal_ranks=True) for action in actions
+    }
+
+
+def _card_name(card: str) -> str:
+    return f"{_RANK_NAMES[card[:-1]]} of {_SUIT_NAMES[card[-1]]}"
 
 
 def _slide_line(line: list[int]) -> tuple[list[int], list[int]]:
@@ -66,11 +145,18 @@ def _slide_board(
     return after, merges
 
 
-def _preview_2048(env, action: str) -> str:
+def _preview_2048(env, action: str, *, include_board: bool = True) -> str:
     board = env.state.game_state["board"]
     after, merges = _slide_board(board, action)
     if after == board:
         strike = env.state.error_count + 1
+        if not include_board:
+            consequence = (
+                "The game would end."
+                if strike == 3
+                else f"This would be invalid attempt {strike} of 3."
+            )
+            return f"Sliding {action.lower()} has no effect. {consequence}"
         outcome = "game ends" if strike == 3 else f"invalid streak becomes {strike}/3"
         return f"Slide {action.lower()}: board unchanged; {outcome}."
 
@@ -91,14 +177,38 @@ def _preview_2048(env, action: str) -> str:
     )
     max_tile = max(map(max, after))
     target = "; target reached" if max_tile >= env.target_tile else ""
+    if not include_board:
+        merge_prose = (
+            ", ".join(
+                f"{count} pair{'s' if count != 1 else ''} of tiles worth {value} "
+                f"{'merge' if count != 1 else 'merges'} into "
+                f"{count} tile{'s' if count != 1 else ''} worth {value * 2}"
+                for value, count in sorted(counts.items())
+            )
+            if merges
+            else "no tiles merge"
+        )
+        target_prose = (
+            f" This reaches the {env.target_tile} target."
+            if max_tile >= env.target_tile
+            else ""
+        )
+        return (
+            f"Sliding {action.lower()}: {merge_prose}. The score would be {score}, "
+            f"gaining {gain} points. The largest tile would be {max_tile}. "
+            f"After a random tile appears, {open_after_spawn} spaces would remain empty. "
+            f"The new tile is worth 2 with 90 percent probability or 4 with 10 percent probability."
+            f"{target_prose}"
+        )
+    description = (
+        f"Slide {action.lower()}: {merge_text}; score {score} (+{gain}); "
+        f"largest tile {max_tile}{target}; {open_after_spawn} empty cells after one random "
+        "tile spawns (2: 90%, 4: 10%)."
+    )
     compact_board = " / ".join(
         " ".join(str(value) if value else "." for value in row) for row in after
     )
-    return (
-        f"Slide {action.lower()}: {merge_text}; score {score} (+{gain}); "
-        f"largest tile {max_tile}{target}; {open_after_spawn} empty cells after one random "
-        f"tile spawns (2: 90%, 4: 10%). Board before spawn: {compact_board}."
-    )
+    return f"{description} Board before spawn: {compact_board}."
 
 
 def _preview_sokoban(env, action: str) -> str:
@@ -134,7 +244,7 @@ def _preview_sokoban(env, action: str) -> str:
     )
 
 
-def _preview_blackjack(env, action: str) -> str:
+def _preview_blackjack(env, action: str, *, verbal_ranks: bool = False) -> str:
     hand = env.state.game_state["player_hand"]
     total = env._hand_score(hand)
     if action == "STAND":
@@ -146,7 +256,19 @@ def _preview_blackjack(env, action: str) -> str:
     busts = [rank for rank, score in scores.items() if score > 21]
     safe = sorted({score for score in scores.values() if score <= 21})
     safe_text = f"{safe[0]}–{safe[-1]}" if safe else "none"
-    bust_text = ", ".join(busts) if busts else "none"
+    bust_text = (
+        ", ".join(_RANK_NAMES[rank] if verbal_ranks else rank for rank in busts)
+        if busts
+        else "none"
+    )
+    if verbal_ranks:
+        return (
+            f"Hitting on {total} draws one random card. {len(busts)} of 13 equally likely "
+            f"ranks would bust: {bust_text}. Otherwise, the total would be from "
+            f"{safe[0]} to {safe[-1]}."
+            if safe
+            else f"Hitting on {total} draws one random card, and every rank would bust."
+        )
     return (
         f"Hit on {total}: draw one random card. {len(busts)}/13 equally likely ranks "
         f"bust ({bust_text}); non-bust totals range {safe_text}."

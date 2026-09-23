@@ -26,7 +26,15 @@ Blackjack, labels describe the possible effect of drawing or standing using only
 the visible player hand and dealer upcard; the dealer's hidden card is not used.
 V2 also includes the visible move/hand count where useful. These previews do not
 filter choices or change game rules. The output records `prompt_version`, so
-comparisons can separate the two prompt conditions.
+comparisons can separate prompt conditions.
+
+`--prompt-version v3` removes the board rendering from both the observation and
+action descriptions. For 2048, the model receives a verbal summary of score,
+tile counts, empty spaces, and invalid-move streak, plus verbal previews of
+each slide's merges and resulting score. It never receives tile positions or a
+rendered board. Sokoban likewise uses a verbal status and action outcomes
+without a grid. Blackjack spells out visible cards and keeps its v2 decision
+context. No version uses a hidden dealer card or future random tile location.
 
 Install the decision-bench extra, which includes NumPy for Sokoban, then run a
 seeded random pilot:
