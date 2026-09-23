@@ -23,7 +23,7 @@ class Game2048Env(ta.Env):
             raise ValueError("Board size cannot exceed 10 for practical reasons")
 
     def reset(self, num_players: int, seed: Optional[int] = None):
-        self.state = ta.SinglePlayerState(num_players=num_players, seed=seed)
+        self.state = ta.SinglePlayerState(num_players=num_players, seed=seed, error_allowance=2)
         board = [[0] * self.board_size for _ in range(self.board_size)]
         self._spawn_tile(board)
         self._spawn_tile(board)

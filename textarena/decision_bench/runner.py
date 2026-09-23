@@ -11,7 +11,7 @@ from typing import Protocol
 
 import textarena as ta
 
-PROTOCOL_VERSION = "0.1.0"
+PROTOCOL_VERSION = "0.2.0"
 GAME_ACTIONS = {
     "2048-v0-super-easy": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Sokoban-v0": ("UP", "DOWN", "LEFT", "RIGHT"),

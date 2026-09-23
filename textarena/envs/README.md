@@ -151,6 +151,8 @@
 
 **2048** is a 4 × 4 sliding-tile puzzle: issue `[Up]`, `[Down]`, `[Left]`, or `[Right]` to slide the board; identical tiles that collide merge and double. Reach the **target tile** (default 2048) before no moves remain.
 
+Invalid actions and moves that leave the board unchanged end the game on the third consecutive attempt. A move that changes the board resets the count.
+
 | **Reward Setting**        | **Reward**                              |
 |---------------------------|-----------------------------------------|
 | Invalid / no-effect move  | `current_max / target_tile`             |
@@ -3290,4 +3292,3 @@ No env params.
 
 
 <hr></details>
-
