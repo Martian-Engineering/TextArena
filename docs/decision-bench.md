@@ -97,3 +97,5 @@ python scripts/run_full2048.py --seed 100 --episodes 20 --workers 4 \
 This runner evaluates v1–v4 and random on the same seeds. Jev runs require
 `TYPESAFE_API_KEY` in the process environment. The JSONL checkpoint records
 individual episodes; each prompt version also gets a sorted JSON result file.
+The [full-game 2048 results](../benchmarks/2048-full-seed100-20/README.md)
+report how far each policy got on seeds 100–119 before reaching 2048 or losing.
