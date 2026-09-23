@@ -17,9 +17,11 @@ from .prompts import (
     v2_observation,
     v3_criteria,
     v3_observation,
+    v4_criteria,
+    v4_observation,
 )
 
-PROTOCOL_VERSION = "0.4.0"
+PROTOCOL_VERSION = "0.5.0"
 GAME_ACTIONS = {
     "2048-v0-super-easy": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Sokoban-v0": ("UP", "DOWN", "LEFT", "RIGHT"),
@@ -102,6 +104,8 @@ def run_episode(
         raise ValueError("max_decisions must be positive")
     if prompt_version not in PROMPT_VERSIONS:
         raise ValueError(f"unsupported prompt version: {prompt_version}")
+    if prompt_version == "v4" and not game_id.startswith("2048-"):
+        raise ValueError("v4 is available only for 2048")
 
     env = CurrentBoardObservationWrapper(ta.make(f"{game_id}-raw"))
     env.reset(num_players=1, seed=seed)
@@ -123,6 +127,9 @@ def run_episode(
             elif prompt_version == "v3":
                 observation = v3_observation(env, game_id)
                 criteria = v3_criteria(env, game_id, presented_actions)
+            elif prompt_version == "v4":
+                observation = v4_observation(env)
+                criteria = v4_criteria(env, presented_actions)
             started = time.perf_counter()
             try:
                 if prompt_version != "v1":

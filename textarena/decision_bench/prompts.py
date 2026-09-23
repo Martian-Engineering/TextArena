@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
+from itertools import pairwise
 
-PROMPT_VERSIONS = ("v1", "v2", "v3")
+PROMPT_VERSIONS = ("v1", "v2", "v3", "v4")
 _DIRECTIONS = {"UP": (-1, 0), "DOWN": (1, 0), "LEFT": (0, -1), "RIGHT": (0, 1)}
 _RANK_NAMES = {
     "2": "two",
@@ -101,6 +102,72 @@ def v3_criteria(env, game_id: str, actions: tuple[str, ...]) -> dict[str, str]:
     return {
         action: _preview_blackjack(env, action, verbal_ranks=True) for action in actions
     }
+
+
+def v4_observation(env) -> str:
+    """Port the Fluid demo's fixed task text without sending tile positions."""
+    return (
+        "Build the largest tile without filling the board. "
+        "Choose the safest 2048 swipe. Preserve empty cells, ordered high tiles, "
+        f"and merges. Reach a tile worth {env.target_tile}."
+    )
+
+
+def v4_criteria(env, actions: tuple[str, ...]) -> dict[str, str]:
+    board = env.state.game_state["board"]
+    result = {}
+    for action in actions:
+        after, merges = _slide_board(board, action)
+        if after == board:
+            strike = env.state.error_count + 1
+            result[action] = (
+                f"swipe {action.lower()}: no board change, invalid attempt {strike} of 3"
+            )
+            continue
+        maximum = max(map(max, after))
+        corners = (after[0][0], after[0][-1], after[-1][0], after[-1][-1])
+        location = (
+            "largest tile in a corner"
+            if maximum in corners
+            else "largest tile away from a corner"
+        )
+        empty = sum(value == 0 for row in after for value in row)
+        gain = sum(value * 2 for value in merges)
+        monotonicity = sum(_line_monotonicity_penalty(row) for row in after)
+        monotonicity += sum(
+            _line_monotonicity_penalty([row[col] for row in after])
+            for col in range(len(after))
+        )
+        roughness = 0
+        for row in range(len(after)):
+            for col in range(len(after[row])):
+                value = after[row][col]
+                if not value:
+                    continue
+                if col + 1 < len(after[row]) and after[row][col + 1]:
+                    roughness += abs(
+                        _tile_exponent(value) - _tile_exponent(after[row][col + 1])
+                    )
+                if row + 1 < len(after) and after[row + 1][col]:
+                    roughness += abs(
+                        _tile_exponent(value) - _tile_exponent(after[row + 1][col])
+                    )
+        result[action] = (
+            f"swipe {action.lower()}: {empty} empty cells, gain {gain}, "
+            f"{location}, monotonicity penalty {monotonicity}, roughness {roughness}"
+        )
+    return result
+
+
+def _tile_exponent(value: int) -> int:
+    return value.bit_length() - 1 if value else 0
+
+
+def _line_monotonicity_penalty(line: list[int]) -> int:
+    exponents = [_tile_exponent(value) for value in line]
+    increasing = sum(max(0, left - right) for left, right in pairwise(exponents))
+    decreasing = sum(max(0, right - left) for left, right in pairwise(exponents))
+    return min(increasing, decreasing)
 
 
 def _card_name(card: str) -> str:

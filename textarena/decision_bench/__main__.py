@@ -31,6 +31,10 @@ def main() -> None:
     unknown = set(games) - GAME_ACTIONS.keys()
     if unknown:
         parser.error(f"unsupported games: {', '.join(sorted(unknown))}")
+    if args.prompt_version == "v4" and any(
+        not game.startswith("2048-") for game in games
+    ):
+        parser.error("v4 is available only for 2048; pass --games 2048-v0-super-easy")
     if args.policy == "systemone":
         if not all((args.endpoint, args.model, args.api_key_env)):
             parser.error("systemone requires --endpoint, --model, and --api-key-env")

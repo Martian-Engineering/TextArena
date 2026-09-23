@@ -36,6 +36,17 @@ rendered board. Sokoban likewise uses a verbal status and action outcomes
 without a grid. Blackjack spells out visible cards and keeps its v2 decision
 context. No version uses a hidden dealer card or future random tile location.
 
+`--prompt-version v4 --games 2048-v0-super-easy` ports the feature labels from
+[FluidUse's GLiClass 2048 demo](https://github.com/FluidInference/FluidUse/tree/main/Sources/GLiClass2048Demo).
+The model receives a fixed safety goal and, for each direction, the empty-cell
+count after the slide, score gain, whether the largest tile is in a corner,
+monotonicity penalty, and roughness. Neither the current nor resulting board is
+sent. The feature calculations follow FluidUse's `Game2048.describe` and
+`Game2048.features`. This prompt-only comparison retains all four directions,
+including no-effect moves. It does not apply FluidUse's heuristic shortlist,
+one-move lookahead, or confidence-margin fallback, which are separate policy
+choices rather than prompt text.
+
 Install the decision-bench extra, which includes NumPy for Sokoban, then run a
 seeded random pilot:
 

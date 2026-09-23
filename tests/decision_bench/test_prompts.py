@@ -12,6 +12,8 @@ from textarena.decision_bench.prompts import (
     v2_observation,
     v3_criteria,
     v3_observation,
+    v4_criteria,
+    v4_observation,
 )
 from textarena.decision_bench.runner import (
     GAME_ACTIONS,
@@ -178,6 +180,43 @@ class PromptVersionTests(unittest.TestCase):
         finally:
             env.close()
 
+    def test_v4_2048_uses_fluid_features_without_a_board(self):
+        env = environment("2048-v0-super-easy")
+        try:
+            env.state.game_state["board"] = [[2, 8, 4, 0]] + [[0] * 4 for _ in range(3)]
+            before = [row[:] for row in env.state.game_state["board"]]
+            observation = v4_observation(env)
+            criteria = v4_criteria(env, ("DOWN", "LEFT"))
+            self.assertEqual(
+                criteria["DOWN"],
+                "swipe down: 13 empty cells, gain 0, largest tile away from a "
+                "corner, monotonicity penalty 2, roughness 3",
+            )
+            self.assertIn("no board change, invalid attempt 1 of 3", criteria["LEFT"])
+            self.assertIn(
+                "Preserve empty cells, ordered high tiles, and merges", observation
+            )
+            self.assertNotIn("Current Board:", observation + str(criteria))
+            self.assertNotIn("Board before spawn", observation + str(criteria))
+            self.assertEqual(env.state.game_state["board"], before)
+        finally:
+            env.close()
+
+    def test_v4_runner_sends_feature_labels_for_all_four_directions(self):
+        policy = CapturePolicy()
+        run_episode(
+            "2048-v0-super-easy", policy, seed=100, max_decisions=1, prompt_version="v4"
+        )
+        self.assertEqual(set(policy.criteria), set(GAME_ACTIONS["2048-v0-super-easy"]))
+        self.assertTrue(
+            all(value.startswith("swipe ") for value in policy.criteria.values())
+        )
+        self.assertNotIn("Current Board:", policy.observation)
+        with self.assertRaisesRegex(ValueError, "v4 is available only for 2048"):
+            run_episode(
+                "Sokoban-v0", policy, seed=100, max_decisions=1, prompt_version="v4"
+            )
+
     def test_prompt_versions_do_not_change_random_gameplay(self):
         arguments = {"first_seed": 100, "episodes": 3, "max_decisions": 20}
         old = run_benchmark(
@@ -197,14 +236,30 @@ class PromptVersionTests(unittest.TestCase):
             prompt_version="v3",
             **arguments,
         )
+        fluid = run_benchmark(
+            ("2048-v0-super-easy",),
+            RandomPolicy,
+            prompt_version="v4",
+            **arguments,
+        )
         self.assertEqual(old["prompt_version"], "v1")
         self.assertEqual(new["prompt_version"], "v2")
         self.assertEqual(verbal["prompt_version"], "v3")
-        for rows in (old["results"], new["results"], verbal["results"]):
+        self.assertEqual(fluid["prompt_version"], "v4")
+        for rows in (
+            old["results"],
+            new["results"],
+            verbal["results"],
+            fluid["results"],
+        ):
             for row in rows:
                 row.pop("mean_latency_ms")
         self.assertEqual(old["results"], new["results"])
         self.assertEqual(old["results"], verbal["results"])
+        self.assertEqual(
+            [row for row in old["results"] if row["game"].startswith("2048-")],
+            fluid["results"],
+        )
 
 
 if __name__ == "__main__":
