@@ -78,6 +78,8 @@ The [2048 v1/v2 prompt comparison](../benchmarks/2048-v1-v2-seed100-20/README.md
 includes its run settings, aggregate results, and raw per-episode JSON.
 The [2048 v3 verbal-only pilot](../benchmarks/2048-v3-seed100-20/README.md)
 compares Jev against those runs on the same 20 seeds.
+The [Fluid-style v4 pilot](../benchmarks/2048-v4-fluid-seed100-20/README.md)
+tests feature labels on those seeds without FluidUse's heuristic shortlist.
 
 The runner covers single-player games and does not calculate confidence
 intervals or publish a model leaderboard.
