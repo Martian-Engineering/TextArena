@@ -23,6 +23,9 @@ A suite of 100+ single-, two-, and multi-player text-based games for benchmarkin
 
 ## Introduction
 
+This Martian Engineering fork also includes a [decision-model pilot](docs/decision-bench.md)
+for fixed-choice play on 2048, Sokoban, and Blackjack.
+
 **TextArena** is an open-source framework for evaluating and training language-model agents through competitive and cooperative text-based games.
 
 It provides **100+ single-, two-, and multi-player environments** through an interface styled after [OpenAI Gym](https://github.com/openai/gym), ranging from classic board and card games to negotiation, social deduction, and multi-agent reasoning tasks. TextArena makes it easy to plug in language-model agents, run self-play or model-vs-model evaluations, and build training pipelines around interactive environments. It also supports 192 languages, enabling the same environments to be presented to agents through different language interfaces.
@@ -207,5 +210,3 @@ Some examples:
 - Extend FifteenPuzzle to arbitrary sizes.
 - Review multilingual translations.
 - Improve rendering, tests, or tooling.
-
-

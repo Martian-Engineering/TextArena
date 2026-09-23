@@ -1,0 +1,17 @@
+{
+  "protocol_version": "0.6.0",
+  "textarena_version": "0.7.3",
+  "source_digest": "094582d18d7ec836b4f84bbe321d50e416e6192c1836ecd464b03066133472b4",
+  "game": "2048-v0",
+  "first_seed": 100,
+  "episodes_per_game": 20,
+  "versions": [
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+    "random"
+  ],
+  "model": "jev-1.13.0",
+  "endpoint_digest": "17abdbd0cf748030a25a6c7693461b98ac2889b23590f11c185652ec125830e9"
+}
