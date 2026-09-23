@@ -39,7 +39,12 @@ class SystemOnePolicy:
             "endpoint": urlunsplit((parsed.scheme, host, parsed.path, "", "")),
         }
 
-    def decide(self, observation: str, actions: tuple[str, ...]) -> Decision:
+    def decide(
+        self,
+        observation: str,
+        actions: tuple[str, ...],
+        criteria: dict[str, str] | None = None,
+    ) -> Decision:
         api_key = os.environ.get(self.api_key_env)
         if not api_key:
             raise ValueError(f"{self.api_key_env} is required")
@@ -50,9 +55,9 @@ class SystemOnePolicy:
                 "action": {
                     "type": "choice",
                     "instructions": "Choose one move for the current game state.",
-                    "criteria": {
-                        action: f"Move {action.lower()}" for action in actions
-                    },
+                    "criteria": criteria
+                    if criteria is not None
+                    else {action: f"Move {action.lower()}" for action in actions},
                 }
             },
         }

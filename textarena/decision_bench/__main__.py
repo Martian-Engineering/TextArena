@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 
+from .prompts import PROMPT_VERSIONS
 from .runner import GAME_ACTIONS, RandomPolicy, run_benchmark
 from .systemone import SystemOnePolicy
 
@@ -22,6 +23,7 @@ def main() -> None:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--seed", type=int, default=100)
     parser.add_argument("--max-decisions", type=int, default=500)
+    parser.add_argument("--prompt-version", choices=PROMPT_VERSIONS, default="v1")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -49,6 +51,7 @@ def main() -> None:
         first_seed=args.seed,
         episodes=args.episodes,
         max_decisions=args.max_decisions,
+        prompt_version=args.prompt_version,
     )
     with args.output.open("x") as output:
         json.dump(result, output, indent=2)

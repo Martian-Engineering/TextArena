@@ -11,7 +11,9 @@ from typing import Protocol
 
 import textarena as ta
 
-PROTOCOL_VERSION = "0.2.0"
+from .prompts import PROMPT_VERSIONS, v2_criteria, v2_observation
+
+PROTOCOL_VERSION = "0.3.0"
 GAME_ACTIONS = {
     "2048-v0-super-easy": ("UP", "DOWN", "LEFT", "RIGHT"),
     "Sokoban-v0": ("UP", "DOWN", "LEFT", "RIGHT"),
@@ -51,7 +53,12 @@ class Decision:
 class Policy(Protocol):
     name: str
 
-    def decide(self, observation: str, actions: tuple[str, ...]) -> Decision: ...
+    def decide(
+        self,
+        observation: str,
+        actions: tuple[str, ...],
+        criteria: dict[str, str] | None = None,
+    ) -> Decision: ...
 
     def metadata(self) -> dict: ...
 
@@ -62,7 +69,12 @@ class RandomPolicy:
     def __init__(self, seed: int):
         self._rng = random.Random(seed)
 
-    def decide(self, observation: str, actions: tuple[str, ...]) -> Decision:
+    def decide(
+        self,
+        observation: str,
+        actions: tuple[str, ...],
+        criteria: dict[str, str] | None = None,
+    ) -> Decision:
         return Decision(self._rng.choice(actions))
 
     def metadata(self) -> dict:
@@ -75,12 +87,15 @@ def run_episode(
     *,
     seed: int,
     max_decisions: int = 500,
+    prompt_version: str = "v1",
 ) -> dict:
     """Use only the observation returned to the current player by TextArena."""
     if game_id not in GAME_ACTIONS:
         raise ValueError(f"unsupported decision-bench game: {game_id}")
     if max_decisions < 1:
         raise ValueError("max_decisions must be positive")
+    if prompt_version not in PROMPT_VERSIONS:
+        raise ValueError(f"unsupported prompt version: {prompt_version}")
 
     env = CurrentBoardObservationWrapper(ta.make(f"{game_id}-raw"))
     env.reset(num_players=1, seed=seed)
@@ -96,9 +111,15 @@ def run_episode(
             if player_id != 0 or not isinstance(observation, str):
                 raise RuntimeError("expected a single-player text observation")
             presented_actions = _ordered_actions(actions, game_id, seed, len(latencies))
+            if prompt_version == "v2":
+                observation = v2_observation(env, game_id, observation)
+                criteria = v2_criteria(env, game_id, presented_actions)
             started = time.perf_counter()
             try:
-                decision = policy.decide(observation, presented_actions)
+                if prompt_version == "v2":
+                    decision = policy.decide(observation, presented_actions, criteria)
+                else:
+                    decision = policy.decide(observation, presented_actions)
             except Exception as error:  # noqa: BLE001 - policy failures are episode results
                 latencies.append((time.perf_counter() - started) * 1000)
                 terminal_reason = f"policy_error: {type(error).__name__}: {error}"
@@ -172,11 +193,14 @@ def run_benchmark(
     first_seed: int,
     episodes: int,
     max_decisions: int = 500,
+    prompt_version: str = "v1",
 ) -> dict:
     if episodes < 1:
         raise ValueError("episodes must be positive")
     if not game_ids:
         raise ValueError("at least one game is required")
+    if prompt_version not in PROMPT_VERSIONS:
+        raise ValueError(f"unsupported prompt version: {prompt_version}")
     results = []
     policy_metadata = None
     for game_id in game_ids:
@@ -185,10 +209,17 @@ def run_benchmark(
             if policy_metadata is None:
                 policy_metadata = policy.metadata()
             results.append(
-                run_episode(game_id, policy, seed=seed, max_decisions=max_decisions)
+                run_episode(
+                    game_id,
+                    policy,
+                    seed=seed,
+                    max_decisions=max_decisions,
+                    prompt_version=prompt_version,
+                )
             )
     return {
         "protocol_version": PROTOCOL_VERSION,
+        "prompt_version": prompt_version,
         "textarena_version": ta.__version__,
         "policy_metadata": policy_metadata,
         "first_seed": first_seed,
